@@ -29,7 +29,12 @@ if __name__ == '__main__':
         description='Demo on using the LLMEngine class directly')
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
-    args.model = "meta-llama/Llama-2-70b-hf"
+
+    # Uncomment model you wish to test with
+    # args.model = "meta-llama/Llama-2-70b-hf" # Original model used
+    # args.model = "meta-llama/Llama-2-7b-hf"
+    args.model = "facebook/opt-125m" # Stalling on Oracle
+    
     args.tensor_parallel_size = 2
     args.sep_prompt_token = True
     engine = initialize_engine(args)
