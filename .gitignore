@@ -167,6 +167,10 @@ cython_debug/
 
 # Results
 *.csv
+*.sqlite
+*.nsys-rep
+*.qdstrm
+*.ncu-rep
 
 # Python pickle files
 *.pkl

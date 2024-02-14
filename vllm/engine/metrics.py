@@ -95,6 +95,14 @@ class StatLogger:
         # Tracked stats over current local logging interval.
         self.num_prompt_tokens: List[int] = []
         self.num_generation_tokens: List[int] = []
+        self.num_running: List[int] = []
+        self.num_swapped: List[int] = []
+        self.num_waiting: List[int] = []
+        self.gpu_cache_usage: List[float] = []
+        self.cpu_cache_usage: List[float] = []
+        self.time_to_first_tokens: List[float] = []
+        self.time_per_output_tokens: List[float] = []
+        self.time_e2e_requests: List[float] = []
 
     def _get_throughput(self, tracked_stats: List[int], now: float) -> float:
         return float(np.sum(tracked_stats) / (now - self.last_local_log))
@@ -139,14 +147,22 @@ class StatLogger:
            Logs to Stdout every self.local_interval seconds."""
 
         # Log to prometheus.
-        self._log_prometheus(stats)
+        # self._log_prometheus(stats)
 
         # Save tracked stats for token counters.
         self.num_prompt_tokens.append(stats.num_prompt_tokens)
         self.num_generation_tokens.append(stats.num_generation_tokens)
+        self.num_running.append(stats.num_running)
+        self.num_swapped.append(stats.num_swapped)
+        self.num_waiting.append(stats.num_waiting)
+        self.gpu_cache_usage.append(stats.gpu_cache_usage)
+        self.cpu_cache_usage.append(stats.cpu_cache_usage)
+        self.time_to_first_tokens.extend(stats.time_to_first_tokens)
+        self.time_per_output_tokens.extend(stats.time_per_output_tokens)
+        self.time_e2e_requests.extend(stats.time_e2e_requests)
 
         # Log locally every local_interval seconds.
-        if self._local_interval_elapsed(stats.now):
+        if self.local_interval != 0 and self._local_interval_elapsed(stats.now):
 
             # Compute summary metrics for tracked stats (and log them to promethus if applicable).
             prompt_throughput = self._get_throughput(self.num_prompt_tokens,
@@ -171,3 +187,38 @@ class StatLogger:
             self.num_prompt_tokens = []
             self.num_generation_tokens = []
             self.last_local_log = stats.now
+
+    def start_log_point(self, now) -> None:
+        # Reset tracked stats, set start time
+        self.num_prompt_tokens = []
+        self.num_generation_tokens = []
+        self.num_running = []
+        self.num_swapped = []
+        self.num_waiting = []
+        self.gpu_cache_usage = []
+        self.cpu_cache_usage = []
+        self.time_to_first_tokens = []
+        self.time_per_output_tokens = []
+        self.time_e2e_requests = []
+        self.last_local_log = now
+
+    def end_log_point(self, now) -> None:
+        # Compute summary metrics for tracked stats (and log them to promethus if applicable).
+        prompt_throughput = self._get_throughput(self.num_prompt_tokens,
+                                                    now=now)
+        generation_throughput = self._get_throughput(
+            self.num_generation_tokens, now=now)
+
+        # Log to stdout.
+        logger.info("")
+        logger.info(f"Avg prompt throughput: {prompt_throughput:.2f} tokens/s ")
+        logger.info(f"Avg generation throughput: {generation_throughput:.2f} tokens/s")
+        logger.info(f"Avg Running: {np.mean(self.num_running) if len(self.num_running) > 0 else 0:.2f} reqs")
+        logger.info(f"Avg Swapped: {np.mean(self.num_swapped) if len(self.num_swapped) > 0 else 0:.2f} reqs")
+        logger.info(f"Avg Pending: {np.mean(self.num_waiting) if len(self.num_waiting) > 0 else 0:.2f} reqs")
+        logger.info(f"Avg GPU KV cache usage: {np.mean(self.gpu_cache_usage) * 100 if len(self.gpu_cache_usage) > 0 else 0:.2f}%")
+        logger.info(f"Avg CPU KV cache usage: {np.mean(self.cpu_cache_usage) * 100 if len(self.cpu_cache_usage) > 0 else 0:.2f}%")
+        logger.info(f"Avg time_to_first_tokens: {np.mean(self.time_to_first_tokens) if len(self.time_to_first_tokens) > 0 else 0:.6f}s")
+        logger.info(f"Avg time_per_output_tokens: {np.mean(self.time_per_output_tokens) if len(self.time_per_output_tokens) > 0 else 0:.6f}s")
+        logger.info(f"Avg time_e2e_requests: {np.mean(self.time_e2e_requests) if len(self.time_e2e_requests) > 0 else 0:.6f}s")
+        logger.info("")

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from ray.util.placement_group import PlacementGroup
 
 logger = init_logger(__name__)
-_LOCAL_LOGGING_INTERVAL_SEC = 5
+_LOCAL_LOGGING_INTERVAL_SEC = 0 # Originally 5, 0 to disable interval logging
 
 
 class LLMEngine:
@@ -102,6 +102,7 @@ class LLMEngine:
 
         self._init_tokenizer()
         self.seq_counter = Counter()
+        self._num_steps = 0
 
         # Create the parallel GPU workers.
         if self.parallel_config.worker_use_ray:
@@ -828,6 +829,8 @@ class LLMEngine:
             >>>         break
         """
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
+        if seq_group_metadata_list[0].is_prompt:
+            logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
 
         if scheduler_outputs.is_empty():
             output = []
@@ -860,6 +863,7 @@ class LLMEngine:
             # Only the driver worker returns the sampling results.
             output = all_outputs[0]
 
+        self._num_steps += 1
         return self._process_model_outputs(output, scheduler_outputs)
 
     def do_log_stats(self) -> None:
