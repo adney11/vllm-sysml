@@ -78,6 +78,7 @@ class ModelRunner:
         self.kv_cache_dtype = kv_cache_dtype
 
     def load_model(self) -> None:
+        torch.cuda.nvtx.range_push("load_model")
         self.model = get_model(self.model_config, self.device_config,
                                self.lora_config)
 
@@ -90,20 +91,24 @@ class ModelRunner:
                 self.scheduler_config.max_paddings, vocab_size,
                 self.lora_config, self.device)
             self.model = self.lora_manager.create_lora_manager(self.model)
+        torch.cuda.nvtx.range_pop()
 
     def set_block_size(self, block_size: int) -> None:
+        torch.cuda.nvtx.range_push("set_block_size")
         self.block_size = block_size
 
         max_num_blocks = (self.max_context_len_to_capture + block_size -
                           1) // block_size
         self.graph_block_tables = np.zeros(
             (max(_BATCH_SIZES_TO_CAPTURE), max_num_blocks), dtype=np.int32)
+        torch.cuda.nvtx.range_pop()
 
     def _prepare_prompt(
         self,
         seq_group_metadata_list: List[SequenceGroupMetadata],
     ) -> Tuple[torch.Tensor, torch.Tensor, InputMetadata, List[int], List[int],
                List[int], List[int], Set[LoRARequest]]:
+        torch.cuda.nvtx.range_push("_prepare_prompt")
         assert len(seq_group_metadata_list) > 0
         input_tokens: List[List[int]] = []
         input_positions: List[List[int]] = []
@@ -238,6 +243,7 @@ class ModelRunner:
             use_cuda_graph=False,
             kv_cache_dtype=self.kv_cache_dtype,
         )
+        torch.cuda.nvtx.range_pop()
         return (input_tokens, input_positions, input_metadata, prompt_lens,
                 subquery_lens, lora_index_mapping, lora_prompt_mapping,
                 lora_requests)
@@ -247,6 +253,7 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
     ) -> Tuple[torch.Tensor, torch.Tensor, InputMetadata, List[int], List[int],
                Set[LoRARequest]]:
+        torch.cuda.nvtx.range_push("_prepare_decode")
         assert len(seq_group_metadata_list) > 0
         input_tokens: List[List[int]] = []
         input_positions: List[List[int]] = []
@@ -366,6 +373,7 @@ class ModelRunner:
             use_cuda_graph=use_captured_graph,
             kv_cache_dtype=self.kv_cache_dtype,
         )
+        torch.cuda.nvtx.range_pop()
         return (input_tokens, input_positions, input_metadata,
                 lora_index_mapping, lora_prompt_mapping, lora_requests)
 
@@ -375,6 +383,7 @@ class ModelRunner:
         prompt_lens: List[int],
         subquery_lens: Optional[List[int]],
     ) -> SamplingMetadata:
+        torch.cuda.nvtx.range_push("_prepare_sample")
         seq_groups: List[Tuple[List[int], SamplingParams]] = []
         selected_token_indices: List[int] = []
         selected_token_start_idx = 0
@@ -443,6 +452,7 @@ class ModelRunner:
             selected_token_indices=selected_token_indices,
             categorized_sample_indices=categorized_sample_indices,
         )
+        torch.cuda.nvtx.range_pop()
         return sampling_metadata
 
     def prepare_input_tensors(
@@ -451,6 +461,7 @@ class ModelRunner:
         blocks_to_nw: Optional[Dict[int, List[int]]],
     ) -> Tuple[torch.Tensor, torch.Tensor, InputMetadata, SamplingMetadata,
                Set[int], LoRAMapping]:
+        torch.cuda.nvtx.range_push("prepare_inpput_tensor")
         stage_group = get_stage_parallel_group()
         if self.is_driver_worker:
             # NOTE: We assume that all sequences in the group are all prompts or
@@ -530,6 +541,7 @@ class ModelRunner:
             )
 
         input_metadata.blocks_to_nw = blocks_to_nw
+        torch.cuda.nvtx.range_pop()
         return (input_tokens, input_positions, input_metadata,
                 sampling_metadata, lora_requests, lora_mapping)
 
@@ -540,6 +552,7 @@ class ModelRunner:
         kv_caches: List[Tuple[torch.Tensor, torch.Tensor]],
         blocks_to_nw: Dict[int, List[int]] = {},
     ) -> Optional[SamplerOutput]:
+        torch.cuda.nvtx.range_push("execute_model")
         (input_tokens, input_positions, input_metadata, sampling_metadata,
          lora_requests,
          lora_mapping) = self.prepare_input_tensors(seq_group_metadata_list, blocks_to_nw)
@@ -565,10 +578,12 @@ class ModelRunner:
             hidden_states=hidden_states,
             sampling_metadata=sampling_metadata,
         )
+        torch.cuda.nvtx.range_pop()
         return output
 
     @torch.inference_mode()
     def profile_run(self) -> None:
+        torch.cuda.nvtx.range_push("profile_run")
         # Enable top-k sampling to reflect the accurate memory usage.
         vocab_size = self.model_config.get_vocab_size()
         sampling_params = SamplingParams(top_p=0.99, top_k=vocab_size - 1)
@@ -620,6 +635,7 @@ class ModelRunner:
         kv_caches = [(None, None)] * num_layers
         self.execute_model(seqs, kv_caches)
         torch.cuda.synchronize()
+        torch.cuda.nvtx.range_pop()
         return
 
     def remove_all_loras(self) -> bool:
@@ -650,6 +666,7 @@ class ModelRunner:
 
     @torch.inference_mode()
     def capture_model(self, kv_caches: List[KVCache]) -> None:
+        torch.cuda.nvtx.range_push("capture_model")
         assert not self.model_config.enforce_eager
         logger.info("Capturing the model for CUDA graphs. This may lead to "
                     "unexpected consequences if the model is not static. To "
@@ -718,7 +735,7 @@ class ModelRunner:
         elapsed_time = end_time - start_time
         # This usually takes < 10 seconds.
         logger.info(f"Graph capturing finished in {elapsed_time:.0f} secs.")
-
+        torch.cuda.nvtx.range_pop()
 
 class CUDAGraphRunner:
 
