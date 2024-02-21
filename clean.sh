@@ -1,0 +1,1 @@
+rm -f *.nsys-rep *.log *.qdstrm *nvidia-smi.csv *ncu-rep *.sqlite *sum.csv

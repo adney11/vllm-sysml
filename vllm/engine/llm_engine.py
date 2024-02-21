@@ -2,6 +2,7 @@ import copy
 from collections import defaultdict
 import os
 import time
+import torch
 from typing import (TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple,
                     Union)
 
@@ -120,6 +121,18 @@ class LLMEngine:
         if self.parallel_config.sep_prompt_token:
             # Setup the MSCCL++ communication required for KV cache transfer
             self._setup_kvcache_comm()
+
+        logger.info("")
+        logger.info(f"CACHE CONFIG INIT")
+        logger.info(f"block_size = {cache_config.block_size}")
+        logger.info(f"gpu_memory_utilization = {cache_config.gpu_memory_utilization}")
+        logger.info(f"cpu_swap_space_bytes = {cache_config.swap_space_bytes} bytes")
+        logger.info(f"cache_dtype = {cache_config.cache_dtype}")
+        logger.info(f"sliding_window = {cache_config.sliding_window}")
+        logger.info(f"num_gpu_blocks = {cache_config.num_gpu_blocks}")
+        logger.info(f"num_cpu_blocks = {cache_config.num_cpu_blocks}")
+        logger.info("")
+
 
         # Create the scheduler.
         self.scheduler = Scheduler(scheduler_config, cache_config, lora_config,
@@ -1037,8 +1050,10 @@ class LLMEngine:
             driver_kwargs = kwargs
 
         # Start the driver worker after all the ray workers.
+        torch.cuda.nvtx.range_push("driver_worker")
         driver_worker_output = getattr(self.driver_worker,
                                        method)(*driver_args, **driver_kwargs)
+        torch.cuda.nvtx.range_pop()
 
         # Get the results of the ray workers.
         if self.workers:

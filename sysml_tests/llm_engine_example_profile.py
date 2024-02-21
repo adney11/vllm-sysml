@@ -10,6 +10,8 @@ import os
 import pathlib
 tests_path = pathlib.Path(__file__).parent.resolve()
 
+ENABLE_PROFILING_PAUSES = False
+PROFILE_SECTION = "inf" # "prompt", "token", "inf", "not_nsys"
 NUM_OUTPUT_TOKENS = 1024 # sets max_tokens, so it is upper limit not a guaranteed output length
 NUM_INPUT_TOKENS = 1024 # selects randomly generated prompt with n tokens from random_prompts.csv where n = [128, 256, 512, 1024, 2048, 4096, 8192]
 
@@ -54,17 +56,22 @@ def process_requests(engine: LLMEngine,
             engine.add_request(str(request_id), None, sampling_params=sampling_params, prompt_token_ids=prompt)
             request_id += 1
 
-        if step == 0: # step 0 = token processing step:
+        if step == 0: # step 0 = prompt processing step:
             print(f"===> Start of PROMPT phase: Begin profiling...")
-            # input()
+            if ENABLE_PROFILING_PAUSES:
+                input()
             # torch.cuda.nvtx.mark("START PROMPT")
-            torch.cuda.cudart().cudaProfilerStart()
+            if PROFILE_SECTION == "inf" or PROFILE_SECTION == "prompt":
+                torch.cuda.cudart().cudaProfilerStart()
             torch.cuda.nvtx.range_push("prompt")
             engine.stat_logger.start_log_point(time.monotonic())
         elif step == 1:
             print(f"===> Start of TOKEN phase: Begin profiling...")
-            # input()
+            if ENABLE_PROFILING_PAUSES:
+                input()
             # torch.cuda.nvtx.mark("START TOKEN")
+            if PROFILE_SECTION == "token":
+                torch.cuda.cudart().cudaProfilerStart()
             torch.cuda.nvtx.range_push("token")
             engine.stat_logger.start_log_point(time.monotonic())
 
@@ -75,14 +82,19 @@ def process_requests(engine: LLMEngine,
             # torch.cuda.nvtx.mark("END PROMPT")
             engine.stat_logger.end_log_point(time.monotonic())
             torch.cuda.nvtx.range_pop()
-            # input()
+            if PROFILE_SECTION == "prompt":
+                torch.cuda.cudart().cudaProfilerStop()
+            if ENABLE_PROFILING_PAUSES:
+                input()
         elif not engine.has_unfinished_requests():
             print(f"===> End of TOKEN phase: Stop profiling...")
             # torch.cuda.nvtx.mark("END TOKEN")
             engine.stat_logger.end_log_point(time.monotonic())
             torch.cuda.nvtx.range_pop()
-            torch.cuda.cudart().cudaProfilerStop()
-            # input()
+            if PROFILE_SECTION == "inf" or PROFILE_SECTION == "token":
+                torch.cuda.cudart().cudaProfilerStop()
+            if ENABLE_PROFILING_PAUSES:
+                input()
         
         step += 1
 
