@@ -13,5 +13,6 @@ To start:
 Preferred profiling method. *Note: There is significant overhead, particularly w/ larger output tokens. Start w/ less output tokens (ex. 5), then add as needed.*
 1. Configure script with desired # input/output tokens and the *.csv that corresponds to the model used and contains prompts w/ correct # of tokens.  
 2. Run script w/ ncu profiling:  
-    - Ex. `psudo HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 ncu --replay-mode application --nvtx --nvtx-include "prompt/" --nvtx-include "token/" --metrics sm__throughput.avg.pct_of_peak_sustained_elapsed,dram__throughput.avg.pct_of_peak_sustained_elapsed,dram__bytes_read.sum.pct_of_peak_sustained_elapsed,dram__bytes_write.sum.pct_of_peak_sustained_elapsed -o tok5_a10_llama7b_single_req_ncu_sm_mem python sysml_tests/llm_engine_example_profile.py --model meta-llama/llama-2-7b-hf`
+    - Ex. `psudo HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 ncu --replay-mode application --nvtx --nvtx-include "prompt/" --nvtx-include "token/" --metrics sm__throughput.avg.pct_of_peak_sustained_elapsed,dram__throughput.avg.pct_of_peak_sustained_elapsed,dram__bytes_read.sum.pct_of_peak_sustained_elapsed,dram__bytes_write.sum.pct_of_peak_sustained_elapsed -o tok5_a10_llama7b_single_req_ncu_sm_mem python sysml_tests/llm_engine_example_profile.py --model meta-llama/llama-2-7b-hf`  
+    - `--target-processes all`: Target root process and child processes (for multi-ranks)
 3. Process the generated .ncu-rep w/ the `SysML-splitwiser/utils/parse_ncu_rep.ppy` script  
