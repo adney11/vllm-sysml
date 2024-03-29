@@ -32,10 +32,10 @@ if __name__ == '__main__':
 
     # Uncomment model you wish to test with
     # args.model = "meta-llama/Llama-2-70b-hf" # Original model used
-    # args.model = "meta-llama/Llama-2-7b-hf"
-    args.model = "facebook/opt-125m" # Stalling on Oracle
+    args.model = "meta-llama/llama-2-7b-hf"
+    # args.model = "facebook/opt-125m" # Stalling on Oracle
     
-    args.tensor_parallel_size = 2
+    args.tensor_parallel_size = 1
     args.sep_prompt_token = True
     engine = initialize_engine(args)
 

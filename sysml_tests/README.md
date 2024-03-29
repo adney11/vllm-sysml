@@ -16,3 +16,9 @@ Preferred profiling method. *Note: There is significant overhead, particularly w
     - Ex. `psudo HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 ncu --replay-mode application --nvtx --nvtx-include "prompt/" --nvtx-include "token/" --metrics sm__throughput.avg.pct_of_peak_sustained_elapsed,dram__throughput.avg.pct_of_peak_sustained_elapsed,dram__bytes_read.sum.pct_of_peak_sustained_elapsed,dram__bytes_write.sum.pct_of_peak_sustained_elapsed -o tok5_a10_llama7b_single_req_ncu_sm_mem python sysml_tests/llm_engine_example_profile.py --model meta-llama/llama-2-7b-hf`  
     - `--target-processes all`: Target root process and child processes (for multi-ranks)
 3. Process the generated .ncu-rep w/ the `SysML-splitwiser/utils/parse_ncu_rep.ppy` script  
+
+
+# Running MPS
+We will be using the `llm_engine_mps_test.py` script in this directory as the MPS instance code.
+Simply run `run_unmodified_llm_engine_mps.sh` which will enable MPS, start the first instance, wait 2 seconds and start the next instance, and finally disable MPS.
+The outputs of the instances can be found in `instance1.output` and `instance2.output`

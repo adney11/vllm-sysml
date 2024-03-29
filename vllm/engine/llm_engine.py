@@ -89,7 +89,8 @@ class LLMEngine:
             f"enforce_eager={model_config.enforce_eager}, "
             f"kv_cache_dtype={cache_config.cache_dtype}, "
             f"device_config={device_config.device}, "
-            f"seed={model_config.seed})")
+            f"seed={model_config.seed}, "
+            f"cache.gpu_utilization={cache_config.gpu_memory_utilization}")
         # TODO(woosuk): Print more configs in debug mode.
 
         self.model_config = model_config
@@ -256,6 +257,9 @@ class LLMEngine:
         for node_id, gpu_ids in node_gpus.items():
             node_gpus[node_id] = sorted(gpu_ids)
 
+
+        # import pdb
+        # pdb.set_trace()
 
         # Set CUDA_VISIBLE_DEVICES for the driver.
         set_cuda_visible_devices(node_gpus[driver_node_id])
