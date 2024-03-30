@@ -363,8 +363,10 @@ class LLMEngine:
         # Since we use a shared centralized controller, we take the minimum
         # number of blocks across all workers to make sure all the memory
         # operators can be applied to all workers.
-        num_gpu_blocks = min(b[0] for b in num_blocks)
-        num_cpu_blocks = min(b[1] for b in num_blocks)
+        # num_gpu_blocks = min(b[0] for b in num_blocks)
+        # num_cpu_blocks = min(b[1] for b in num_blocks)
+        num_gpu_blocks = 14742
+        num_cpu_blocks = 7281
         # FIXME(woosuk): Change to debug log.
         logger.info(f"# GPU blocks: {num_gpu_blocks}, "
                     f"# CPU blocks: {num_cpu_blocks}")
@@ -765,6 +767,8 @@ class LLMEngine:
     def _process_model_outputs(
             self, output: SamplerOutput,
             scheduler_outputs: SchedulerOutputs) -> List[RequestOutput]:
+        if output == None:
+            return None
         # Update the scheduled sequence groups with the model outputs.
         scheduled_seq_groups = scheduler_outputs.scheduled_seq_groups
         for seq_group, outputs in zip(scheduled_seq_groups, output):
@@ -794,7 +798,7 @@ class LLMEngine:
 
         return request_outputs
 
-    def step(self) -> List[RequestOutput]:
+    def step(self, is_token_phase) -> List[RequestOutput]:
         """Performs one decoding iteration and returns newly generated results.
 
         .. figure:: https://i.imgur.com/sv2HssD.png
@@ -849,6 +853,8 @@ class LLMEngine:
         if seq_group_metadata_list[0].is_prompt:
             logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
 
+        ### Add is_token_phase flag
+
         if scheduler_outputs.is_empty():
             output = []
         elif self.parallel_config.sep_prompt_token:
@@ -875,6 +881,7 @@ class LLMEngine:
                     "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
                     "blocks_to_copy": scheduler_outputs.blocks_to_copy,
                     "blocks_to_nw": {},
+                    "is_token_phase": is_token_phase
                 })
 
             # Only the driver worker returns the sampling results.

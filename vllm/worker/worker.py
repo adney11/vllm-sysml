@@ -327,6 +327,7 @@ class Worker:
         blocks_to_swap_out: Optional[Dict[int, int]] = None,
         blocks_to_copy: Optional[Dict[int, List[int]]] = None,
         blocks_to_nw: Optional[Dict[int, List[int]]] = None,
+        is_token_phase: Optional[bool] = False
     ) -> Optional[SamplerOutput]:
         is_prompt = False
         if self.is_driver_worker:
@@ -369,8 +370,18 @@ class Worker:
             for sem_id in blocks_to_nw:
                 self.kvcache_comm.wait(sem_id)
 
-        output = self.model_runner.execute_model(seq_group_metadata_list,
-                                                 self.gpu_cache, blocks_to_nw)
+        if not (is_token_phase and is_prompt):
+            output = self.model_runner.execute_model(seq_group_metadata_list,
+                                                    self.gpu_cache, blocks_to_nw)
+        else:
+            output = None
+
+        if is_prompt:
+            if is_token_phase:
+                # self.cache_engine.load("test")
+                pass
+            else:
+                self.cache_engine.dump("test")
 
         if len(blocks_to_nw) and self.is_prompt_worker() and is_prompt:
             for sem_id in blocks_to_nw:

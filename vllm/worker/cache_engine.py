@@ -71,22 +71,25 @@ class CacheEngine:
             self.block_size,
         )
 
-    def allocate_gpu_cache(self) -> List[KVCache]:
+    def allocate_gpu_cache(self, is_token_phase=True) -> List[KVCache]:
         gpu_cache: List[KVCache] = []
         key_block_shape = self.get_key_block_shape()
         value_block_shape = self.get_value_block_shape()
-        for _ in range(self.num_layers):
-            key_blocks = torch.empty(
-                size=(self.num_gpu_blocks, *key_block_shape),
-                dtype=self.dtype,
-                device="cuda",
-            )
-            value_blocks = torch.empty(
-                size=(self.num_gpu_blocks, *value_block_shape),
-                dtype=self.dtype,
-                device="cuda",
-            )
-            gpu_cache.append((key_blocks, value_blocks))
+        if is_token_phase:
+            gpu_cache = self.load("test")
+        else:
+            for _ in range(self.num_layers):
+                key_blocks = torch.empty(
+                    size=(self.num_gpu_blocks, *key_block_shape),
+                    dtype=self.dtype,
+                    device="cuda",
+                )
+                value_blocks = torch.empty(
+                    size=(self.num_gpu_blocks, *value_block_shape),
+                    dtype=self.dtype,
+                    device="cuda",
+                )
+                gpu_cache.append((key_blocks, value_blocks))
         return gpu_cache
 
     def allocate_cpu_cache(self) -> List[KVCache]:
@@ -144,6 +147,25 @@ class CacheEngine:
         value_caches = [value_cache for _, value_cache in self.gpu_cache]
         # NOTE(woosuk): This operation implicitly synchronizes the CPU and GPU.
         cache_ops.copy_blocks(key_caches, value_caches, src_to_dsts)
+
+    def dump(self, filename):
+        key_caches = [key_cache for key_cache, _ in self.gpu_cache]
+        value_caches = [value_cache for _, value_cache in self.gpu_cache]
+        torch.save({"key": key_caches, "value": value_caches}, f"{filename}.pt")
+        # for i, tensor in enumerate(key_caches):
+        #     torch.save(tensor, f"saved_cache/{filename}_k_{i}.pt")
+        # for i, tensor in enumerate(value_caches):
+        #     torch.save(tensor, f"saved_cache/{filename}_v_{i}.pt")
+
+    def load(self, filename):
+        kv_dict = torch.load(f"{filename}.pt")#, map_location=torch.device('cpu'))
+        gpu_cache = [(k, v) for k, v in zip(kv_dict["key"], kv_dict["value"])]
+        return gpu_cache
+        # for i in len(kv_dict["key"]):
+        #     self.gpu_cache[i][0] = torch.clone(kv_dict["key"][i]) # key
+        #     self.gpu_cache[i][0] = torch.clone(kv_dict["value"][i]) # key
+        # key_caches = kv_dict["key"]
+        # value_caches = kv_dict["value"]
 
     @staticmethod
     def get_cache_block_size(
