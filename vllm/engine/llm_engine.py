@@ -90,7 +90,8 @@ class LLMEngine:
             f"kv_cache_dtype={cache_config.cache_dtype}, "
             f"device_config={device_config.device}, "
             f"seed={model_config.seed}, "
-            f"cache.gpu_utilization={cache_config.gpu_memory_utilization}")
+            f"cache.gpu_utilization={cache_config.gpu_memory_utilization},"
+            f"cache.is_token_phase={cache_config.is_token_phase}")
         # TODO(woosuk): Print more configs in debug mode.
 
         self.model_config = model_config
@@ -798,7 +799,7 @@ class LLMEngine:
 
         return request_outputs
 
-    def step(self, is_token_phase) -> List[RequestOutput]:
+    def step(self) -> List[RequestOutput]:
         """Performs one decoding iteration and returns newly generated results.
 
         .. figure:: https://i.imgur.com/sv2HssD.png
@@ -881,7 +882,7 @@ class LLMEngine:
                     "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
                     "blocks_to_copy": scheduler_outputs.blocks_to_copy,
                     "blocks_to_nw": {},
-                    "is_token_phase": is_token_phase
+                    "is_token_phase": self.cache_config.is_token_phase
                 })
 
             # Only the driver worker returns the sampling results.

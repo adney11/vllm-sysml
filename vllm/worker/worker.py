@@ -376,12 +376,13 @@ class Worker:
         else:
             output = None
 
+        # TO ADD LATER
         if is_prompt:
             if is_token_phase:
-                # self.cache_engine.load("test")
+                # self.cache_engine.load(seq_group_metadata_list[0].request_id)
                 pass
             else:
-                self.cache_engine.dump("test")
+                self.cache_engine.dump(seq_group_metadata_list[0].request_id)
 
         if len(blocks_to_nw) and self.is_prompt_worker() and is_prompt:
             for sem_id in blocks_to_nw:

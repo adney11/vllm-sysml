@@ -10,8 +10,6 @@ import os
 import pathlib
 tests_path = pathlib.Path(__file__).parent.resolve()
 
-IS_TOKEN_PHASE = True
-
 ENABLE_PROFILING_PAUSES = False
 PROFILE_SECTION = "inf" # "prompt", "token", "step", "inf", "not_nsys"
 NUM_OUTPUT_TOKENS = 1024 # sets max_tokens, so it is upper limit not a guaranteed output length
@@ -56,7 +54,7 @@ def process_requests(engine: LLMEngine,
             torch.cuda.nvtx.range_push("token")
             engine.stat_logger.start_log_point(time.monotonic())
 
-        request_outputs: List[RequestOutput] = engine.step(IS_TOKEN_PHASE)
+        request_outputs: List[RequestOutput] = engine.step()
 
         if step == 0: # step 0 = token processing step:
             print(f"===> End of PROMPT phase: Stop profiling...")
@@ -101,7 +99,7 @@ def initialize_engine(args: argparse.Namespace) -> LLMEngine:
     return LLMEngine.from_engine_args(engine_args)
 
 
-def main(args: argparse.Namespace):
+def run(args: argparse.Namespace):
     """Main function that sets up and runs the prompt processing."""
     args.model = "facebook/opt-125m"
     engine = initialize_engine(args)
@@ -114,4 +112,4 @@ if __name__ == '__main__':
         description='Demo on using the LLMEngine class directly')
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
-    main(args)
+    run(args)

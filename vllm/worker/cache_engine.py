@@ -2,6 +2,7 @@
 from typing import Dict, List, Tuple
 
 import torch
+import os
 
 from vllm._C import cache_ops
 from vllm.config import CacheConfig, ModelConfig, ParallelConfig
@@ -45,7 +46,7 @@ class CacheEngine:
             self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
         # Initialize the cache.
-        self.gpu_cache = self.allocate_gpu_cache()
+        self.gpu_cache = self.allocate_gpu_cache(is_token_phase=cache_config.is_token_phase)
         self.cpu_cache = self.allocate_cpu_cache()
 
         # Initialize the stream for caching operations.
@@ -71,12 +72,12 @@ class CacheEngine:
             self.block_size,
         )
 
-    def allocate_gpu_cache(self, is_token_phase=True) -> List[KVCache]:
+    def allocate_gpu_cache(self, is_token_phase=False) -> List[KVCache]:
         gpu_cache: List[KVCache] = []
         key_block_shape = self.get_key_block_shape()
         value_block_shape = self.get_value_block_shape()
         if is_token_phase:
-            gpu_cache = self.load("test")
+            gpu_cache = self.load("0")
         else:
             for _ in range(self.num_layers):
                 key_blocks = torch.empty(
@@ -158,9 +159,12 @@ class CacheEngine:
         #     torch.save(tensor, f"saved_cache/{filename}_v_{i}.pt")
 
     def load(self, filename):
-        kv_dict = torch.load(f"{filename}.pt")#, map_location=torch.device('cpu'))
-        gpu_cache = [(k, v) for k, v in zip(kv_dict["key"], kv_dict["value"])]
-        return gpu_cache
+        path = f"{filename}.pt"
+        while True:
+            if os.path.exists(path):
+                kv_dict = torch.load(f"{filename}.pt")#, map_location=torch.device('cpu'))
+                gpu_cache = [(k, v) for k, v in zip(kv_dict["key"], kv_dict["value"])]
+                return gpu_cache
         # for i in len(kv_dict["key"]):
         #     self.gpu_cache[i][0] = torch.clone(kv_dict["key"][i]) # key
         #     self.gpu_cache[i][0] = torch.clone(kv_dict["value"][i]) # key

@@ -18,6 +18,7 @@ class EngineArgs:
     load_format: str = 'auto'
     dtype: str = 'auto'
     kv_cache_dtype: str = 'auto'
+    is_token_phase: bool = False
     seed: int = 0
     max_model_len: Optional[int] = None
     worker_use_ray: bool = False
@@ -133,6 +134,10 @@ class EngineArgs:
             help='Data type for kv cache storage. If "auto", will use model '
             'data type. Note FP8 is not supported when cuda version is '
             'lower than 11.8.')
+        parser.add_argument('--is_token_phase',
+                    action='store_true',
+                    default=EngineArgs.is_token_phase,
+                    help='specify whether token phase or not.'),
         parser.add_argument('--max-model-len',
                             type=int,
                             default=EngineArgs.max_model_len,
@@ -293,7 +298,8 @@ class EngineArgs:
         cache_config = CacheConfig(self.block_size,
                                    self.gpu_memory_utilization,
                                    self.swap_space, self.kv_cache_dtype,
-                                   model_config.get_sliding_window())
+                                   model_config.get_sliding_window(), 
+                                   self.is_token_phase)
         parallel_config = ParallelConfig(self.pipeline_parallel_size,
                                          self.tensor_parallel_size,
                                          self.worker_use_ray,

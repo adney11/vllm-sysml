@@ -286,12 +286,14 @@ class CacheConfig:
         swap_space: int,
         cache_dtype: str,
         sliding_window: Optional[int] = None,
+        is_token_phase: Optional[bool] = False
     ) -> None:
         self.block_size = block_size
         self.gpu_memory_utilization = gpu_memory_utilization
         self.swap_space_bytes = swap_space * _GB
         self.cache_dtype = cache_dtype
         self.sliding_window = sliding_window
+        self.is_token_phase = is_token_phase
         self._verify_args()
         self._verify_cache_dtype()
 
