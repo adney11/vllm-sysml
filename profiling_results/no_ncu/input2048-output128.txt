@@ -1,0 +1,57 @@
+
+
+Input: 2048
+Output: 128
+
+
+INFO 03-23 20:42:55 llm_engine.py:74] Initializing an LLM engine with config: model='meta-llama/llama-2-7b-hf', tokenizer='meta-llama/llama-2-7b-hf', tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, device_config=cuda, seed=0)
+INFO 03-23 20:42:58 weight_utils.py:163] Using model weights format ['*.safetensors']
+INFO 03-23 20:43:02 llm_engine.py:368] # GPU blocks: 817, # CPU blocks: 512
+INFO 03-23 20:43:03 model_runner.py:671] Capturing the model for CUDA graphs. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI.
+INFO 03-23 20:43:03 model_runner.py:675] CUDA graphs can take additional 1~3 GiB memory per GPU. If you are running out of memory, consider decreasing `gpu_memory_utilization` or enforcing eager mode. You can also reduce the `max_num_seqs` as needed to decrease memory usage.
+INFO 03-23 20:43:06 model_runner.py:737] Graph capturing finished in 3 secs.
+INFO 03-23 20:43:06 llm_engine.py:125] 
+INFO 03-23 20:43:06 llm_engine.py:126] CACHE CONFIG INIT
+INFO 03-23 20:43:06 llm_engine.py:127] block_size = 16
+INFO 03-23 20:43:06 llm_engine.py:128] gpu_memory_utilization = 0.9
+INFO 03-23 20:43:06 llm_engine.py:129] cpu_swap_space_bytes = 4294967296 bytes
+INFO 03-23 20:43:06 llm_engine.py:130] cache_dtype = auto
+INFO 03-23 20:43:06 llm_engine.py:131] sliding_window = None
+INFO 03-23 20:43:06 llm_engine.py:132] num_gpu_blocks = 817
+INFO 03-23 20:43:06 llm_engine.py:133] num_cpu_blocks = 512
+INFO 03-23 20:43:06 llm_engine.py:134] 
+===> Start of PROMPT phase: Begin profiling...
+INFO 03-23 20:43:06 llm_engine.py:849] 
+INFO 03-23 20:43:06 llm_engine.py:849] ===! Step 0 is prompt phase !===
+INFO 03-23 20:43:06 llm_engine.py:849] 
+===> End of PROMPT phase: Stop profiling...
+INFO 03-23 20:43:06 metrics.py:213] 
+INFO 03-23 20:43:06 metrics.py:214] Avg prompt throughput: 4392.82 tokens/s 
+INFO 03-23 20:43:06 metrics.py:215] Avg generation throughput: 0.00 tokens/s
+INFO 03-23 20:43:06 metrics.py:216] Avg Running: 1.00 reqs
+INFO 03-23 20:43:06 metrics.py:217] Avg Swapped: 0.00 reqs
+INFO 03-23 20:43:06 metrics.py:218] Avg Pending: 0.00 reqs
+INFO 03-23 20:43:06 metrics.py:219] Avg GPU KV cache usage: 15.67%
+INFO 03-23 20:43:06 metrics.py:220] Avg CPU KV cache usage: 0.00%
+INFO 03-23 20:43:06 metrics.py:221] Avg time_to_first_tokens: 0.466256s
+INFO 03-23 20:43:06 metrics.py:222] Avg time_per_output_tokens: 0.000000s
+INFO 03-23 20:43:06 metrics.py:223] Avg time_e2e_requests: 0.000000s
+INFO 03-23 20:43:06 metrics.py:224] 
+===> Start of TOKEN phase: Begin profiling...
+===> End of TOKEN phase: Stop profiling...
+INFO 03-23 20:43:10 metrics.py:213] 
+INFO 03-23 20:43:10 metrics.py:214] Avg prompt throughput: 0.00 tokens/s 
+INFO 03-23 20:43:10 metrics.py:215] Avg generation throughput: 31.20 tokens/s
+INFO 03-23 20:43:10 metrics.py:216] Avg Running: 0.99 reqs
+INFO 03-23 20:43:10 metrics.py:217] Avg Swapped: 0.00 reqs
+INFO 03-23 20:43:10 metrics.py:218] Avg Pending: 0.00 reqs
+INFO 03-23 20:43:10 metrics.py:219] Avg GPU KV cache usage: 16.08%
+INFO 03-23 20:43:10 metrics.py:220] Avg CPU KV cache usage: 0.00%
+INFO 03-23 20:43:10 metrics.py:221] Avg time_to_first_tokens: 0.000000s
+INFO 03-23 20:43:10 metrics.py:222] Avg time_per_output_tokens: 0.032053s
+INFO 03-23 20:43:10 metrics.py:223] Avg time_e2e_requests: 4.536928s
+INFO 03-23 20:43:10 metrics.py:224] 
+Request ID: 0                       # Input Tokens: 2047                       # Output Tokens: 128                       Finish Reason: length
+
+===! Num steps executed: 128 !===
+
