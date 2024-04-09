@@ -93,6 +93,11 @@ class ModelRunner:
             self.model = self.lora_manager.create_lora_manager(self.model)
         torch.cuda.nvtx.range_pop()
 
+    def set_shared_model(self, shared_model) -> None:
+        torch.cuda.nvtx.range_push("set_shared_model")
+        self.model = shared_model
+        torch.cuda.nvtx.range_pop()
+
     def set_block_size(self, block_size: int) -> None:
         torch.cuda.nvtx.range_push("set_block_size")
         self.block_size = block_size

@@ -70,6 +70,7 @@ class LLMEngine:
         lora_config: Optional[LoRAConfig],
         placement_group: Optional["PlacementGroup"],
         log_stats: bool,
+        shared_model=None,
     ) -> None:
         logger.info(
             "Initializing an LLM engine with config: "
@@ -114,7 +115,7 @@ class LLMEngine:
                 os.environ["RAY_USAGE_STATS_ENABLED"] = "0"
             self._init_workers_ray(placement_group)
         else:
-            self._init_workers()
+            self._init_workers(shared_model)
 
         # Profile the memory usage and initialize the cache.
         self._init_cache()
@@ -147,7 +148,7 @@ class LLMEngine:
     def get_tokenizer_for_seq(self, sequence: Sequence):
         return self.tokenizer.get_lora_tokenizer(sequence.lora_request)
 
-    def _init_workers(self):
+    def _init_workers(self, shared_model=None):
         # Lazy import the Worker to avoid importing torch.cuda/xformers
         # before CUDA_VISIBLE_DEVICES is set in the Worker
         from vllm.worker.worker import Worker
@@ -170,8 +171,13 @@ class LLMEngine:
             kv_cache_dtype=self.cache_config.cache_dtype,
             is_driver_worker=True,
         )
-        self._run_workers("init_model")
-        self._run_workers("load_model")
+        if shared_model:
+            self._run_workers("set_shared_model", 
+                    driver_kwargs=
+                    {"shared_model": shared_model})
+        else:
+            self._run_workers("init_model")
+            self._run_workers("load_model")
 
     def _init_tokenizer(self, **tokenizer_init_kwargs):
         init_kwargs = dict(
@@ -352,19 +358,21 @@ class LLMEngine:
             by adjusting the `gpu_memory_utilization` parameters.
         """
         # Get the maximum number of blocks that can be allocated on GPU and CPU.
-        num_blocks = self._run_workers(
-            "profile_num_available_blocks",
-            block_size=self.cache_config.block_size,
-            gpu_memory_utilization=self.cache_config.gpu_memory_utilization,
-            cpu_swap_space=self.cache_config.swap_space_bytes,
-            cache_dtype=self.cache_config.cache_dtype,
-        )
+        # num_blocks = self._run_workers(
+        #     "profile_num_available_blocks",
+        #     block_size=self.cache_config.block_size,
+        #     gpu_memory_utilization=self.cache_config.gpu_memory_utilization,
+        #     cpu_swap_space=self.cache_config.swap_space_bytes,
+        #     cache_dtype=self.cache_config.cache_dtype,
+        # )
 
         # Since we use a shared centralized controller, we take the minimum
         # number of blocks across all workers to make sure all the memory
         # operators can be applied to all workers.
-        num_gpu_blocks = min(b[0] for b in num_blocks)
-        num_cpu_blocks = min(b[1] for b in num_blocks)
+        # num_gpu_blocks = min(b[0] for b in num_blocks)
+        # num_cpu_blocks = min(b[1] for b in num_blocks)
+        num_gpu_blocks = 400 # 0.9 = 817
+        num_cpu_blocks = 256 # 0.9 = 512
         # FIXME(woosuk): Change to debug log.
         logger.info(f"# GPU blocks: {num_gpu_blocks}, "
                     f"# CPU blocks: {num_cpu_blocks}")
@@ -400,7 +408,7 @@ class LLMEngine:
         self._run_workers("dismantle_kvcache_comm")
 
     @classmethod
-    def from_engine_args(cls, engine_args: EngineArgs) -> "LLMEngine":
+    def from_engine_args(cls, engine_args: EngineArgs, shared_model=None) -> "LLMEngine":
         """Creates an LLM engine from the engine arguments."""
         # Create the engine configs.
         engine_configs = engine_args.create_engine_configs()
@@ -410,7 +418,8 @@ class LLMEngine:
         # Create the LLM engine.
         engine = cls(*engine_configs,
                      placement_group,
-                     log_stats=not engine_args.disable_log_stats)
+                     log_stats=not engine_args.disable_log_stats, 
+                     shared_model=shared_model)
         return engine
 
     def encode_request(

@@ -120,6 +120,9 @@ class Worker:
             # Populate Sampler with dst_rank as driver worker's rank.
             self.model_runner.model.sampler.set_dst_rank(self.model_runner.driver_rank)
 
+    def set_shared_model(self, shared_model):
+        self.model_runner.set_shared_model(shared_model)
+
     def init_mscclpp_comm(self, mscclpp_init_method: Optional[str] = None) -> None:
         if mscclpp_init_method is not None:
             try:
