@@ -1,5 +1,6 @@
 import torch
-import threading
+import torch.multiprocessing as mp
+# import threading
 import time
 import tempfile
 import argparse
@@ -13,6 +14,7 @@ from vllm.model_executor.parallel_utils.parallel_state import (
 
 import vllm_worker as vwork
 
+num_workers = 2
 shared_model = None
 
 def init(model="meta-llama/llama-2-7b-hf"):
@@ -47,12 +49,13 @@ def cleanup():
     destroy_model_parallel()
     torch.cuda.empty_cache()
 
-sem = threading.Semaphore(0)
-def worker(rank, args):
+### Threading
+# sem = threading.Semaphore(0)
+def worker(rank, model, args):
     print(f"Creating worker for rank {rank}")
     kwargs = {
         "rank": rank,
-        "shared_model": shared_model,
+        "shared_model": model,
     }
     vwork.worker_main(args, **kwargs)
     # if rank == 0:
@@ -71,18 +74,36 @@ if __name__ == '__main__':
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
 
-    t1 = threading.Thread(target=worker, args=(0, args))
-    t2 = threading.Thread(target=worker, args=(1, args))
+    ### torch.mp 
+    mp.set_start_method("spawn", force=True)
+    shared_model.share_memory()
+    workers = []
 
-    # Start threads
+    for rank in range(num_workers):
+        w = mp.Process(target=worker, args=(rank, shared_model, args), name=f'Inf_Worker_{rank}')
+        workers.append(w)
+
     start = time.time()
-    t1.start()
-    # t2.start()
+    for w in workers:
+        w.start()
 
-    # Wait for threads to finish
-    t1.join()
-    # t2.join()
+    for w in workers:
+        w.join()
     stop = time.time()
+
+    ### Threading
+    # t1 = threading.Thread(target=worker, args=(0, args))
+    # t2 = threading.Thread(target=worker, args=(1, args))
+
+    # # Start threads
+    # start = time.time()
+    # t1.start()
+    # # t2.start()
+
+    # # Wait for threads to finish
+    # t1.join()
+    # # t2.join()
+    # stop = time.time()
 
     print(f"Completed in {stop-start} s")
 

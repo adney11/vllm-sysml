@@ -171,12 +171,12 @@ class LLMEngine:
             kv_cache_dtype=self.cache_config.cache_dtype,
             is_driver_worker=True,
         )
+        self._run_workers("init_model")
         if shared_model:
             self._run_workers("set_shared_model", 
                     driver_kwargs=
                     {"shared_model": shared_model})
         else:
-            self._run_workers("init_model")
             self._run_workers("load_model")
 
     def _init_tokenizer(self, **tokenizer_init_kwargs):
