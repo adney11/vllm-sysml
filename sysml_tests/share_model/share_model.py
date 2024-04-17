@@ -66,8 +66,8 @@ def worker(rank, model, args):
     #     sem.acquire()
     #     print(f"Checking supports_lora set to false: {shared_model.supports_lora}")
 
-if __name__ == '__main__':
-    init()
+def run():
+    # init()
 
     parser = argparse.ArgumentParser(
         description='Demo on using the LLMEngine class directly')
@@ -106,5 +106,16 @@ if __name__ == '__main__':
     # stop = time.time()
 
     print(f"Completed in {stop-start} s")
+
+    # cleanup()
+
+if __name__ == '__main__':
+    init()
+
+    ### Warmup
+    run()
+    torch.cuda.cudart().cudaProfilerStart()
+    run()
+    torch.cuda.cudart().cudaProfilerStop()
 
     cleanup()

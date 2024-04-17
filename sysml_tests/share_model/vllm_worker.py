@@ -11,8 +11,8 @@ import pathlib
 tests_path = pathlib.Path(__file__).parent.resolve()
 
 ENABLE_PROFILING_PAUSES = False
-PROFILE_SECTION = "inf" # "prompt", "token", "step", "inf", "not_nsys"
-NUM_OUTPUT_TOKENS = 1024 # sets max_tokens, so it is upper limit not a guaranteed output length
+PROFILE_SECTION = "not_nsys" # "prompt", "token", "step", "inf", "not_nsys"
+NUM_OUTPUT_TOKENS = 5 # sets max_tokens, so it is upper limit not a guaranteed output length
 NUM_INPUT_TOKENS = 1024 # selects randomly generated prompt with n tokens from random_prompts.csv where n = [128, 256, 512, 1024, 2048, 4096, 8192]
 
 def create_test_prompts() -> List[Tuple[str, SamplingParams]]:
@@ -65,7 +65,8 @@ def process_requests(engine: LLMEngine,
                 input()
             # torch.cuda.nvtx.mark("START PROMPT")
             if PROFILE_SECTION == "inf" or PROFILE_SECTION == "prompt":
-                torch.cuda.cudart().cudaProfilerStart()
+                if rank == 0:
+                    torch.cuda.cudart().cudaProfilerStart()
             torch.cuda.nvtx.range_push("prompt")
             engine.stat_logger.start_log_point(time.monotonic())
         elif step == 1:
@@ -74,7 +75,8 @@ def process_requests(engine: LLMEngine,
                 input()
             # torch.cuda.nvtx.mark("START TOKEN")
             if PROFILE_SECTION == "token":
-                torch.cuda.cudart().cudaProfilerStart()
+                if rank == 0:
+                    torch.cuda.cudart().cudaProfilerStart()
             torch.cuda.nvtx.range_push("token")
             engine.stat_logger.start_log_point(time.monotonic())
 
@@ -86,7 +88,8 @@ def process_requests(engine: LLMEngine,
             engine.stat_logger.end_log_point(time.monotonic())
             torch.cuda.nvtx.range_pop()
             if PROFILE_SECTION == "prompt":
-                torch.cuda.cudart().cudaProfilerStop()
+                if rank == 0:
+                    torch.cuda.cudart().cudaProfilerStop()
             if ENABLE_PROFILING_PAUSES:
                 input()
         elif not engine.has_unfinished_requests():
@@ -95,7 +98,8 @@ def process_requests(engine: LLMEngine,
             engine.stat_logger.end_log_point(time.monotonic())
             torch.cuda.nvtx.range_pop()
             if PROFILE_SECTION == "inf" or PROFILE_SECTION == "token":
-                torch.cuda.cudart().cudaProfilerStop()
+                if rank == 0:
+                    torch.cuda.cudart().cudaProfilerStop()
             if ENABLE_PROFILING_PAUSES:
                 input()
         
@@ -122,6 +126,7 @@ def initialize_engine(args: argparse.Namespace, shared_model=None) -> LLMEngine:
 
 def worker_main(args: argparse.Namespace, **kwargs):
     """Main function that sets up and runs the prompt processing."""
+    global rank; rank = kwargs["rank"]
     args.model = "meta-llama/llama-2-7b-hf"
     args.gpu_memory_utilization = 0.45
     # args.tensor_parallel_size = 4
