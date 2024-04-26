@@ -4,6 +4,7 @@ import torch.multiprocessing as mp
 import time
 import tempfile
 import argparse
+import os
 
 from vllm import EngineArgs, LLMEngine, SamplingParams, RequestOutput
 from vllm.config import (ModelConfig, ParallelConfig, SchedulerConfig,
@@ -51,13 +52,17 @@ def cleanup():
 
 ### Threading
 # sem = threading.Semaphore(0)
-def worker(rank, model, args):
+def worker(rank, model, rx_q, tx_q, args):
+    os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = str(25*(rank+1))
     print(f"Creating worker for rank {rank}")
     kwargs = {
         "rank": rank,
         "shared_model": model,
+        "tx_q": tx_q,
+        "rx_q": rx_q
     }
     vwork.worker_main(args, **kwargs)
+    tx_q.put("DONE")
     # if rank == 0:
     #     print("Setting model supports_lora = False")
     #     shared_model.supports_lora = False
@@ -78,17 +83,37 @@ def run():
     mp.set_start_method("spawn", force=True)
     shared_model.share_memory()
     workers = []
-
+    worker_phase_is_prompt = [True, True]
+    worker_done = [False, False]
+    tx_queues = [mp.SimpleQueue(), mp.SimpleQueue()]
+    rx_queues = [mp.SimpleQueue(), mp.SimpleQueue()]
+    # worker_step_mb = manager.list()
+    # 2 workers
+    # worker_step_mb.append(1)
+    # worker_step_mb.append(1)
+    util = 25
     for rank in range(num_workers):
-        w = mp.Process(target=worker, args=(rank, shared_model, args), name=f'Inf_Worker_{rank}')
+        os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = str(util*(rank+1))
+        # util += 40
+        w = mp.Process(target=worker, args=(rank, shared_model, tx_queues[rank], rx_queues[rank], args), name=f'Inf_Worker_{rank}')
         workers.append(w)
+        tx_queues[rank].put(1)
 
     start = time.time()
     for w in workers:
         w.start()
 
-    for w in workers:
-        w.join()
+    while not all(worker_done):
+        for i in range(num_workers):
+            if not worker_done[i] and not rx_queues[i].empty():
+                msg = rx_queues[i].get()
+                if msg == "DONE":
+                    worker_done[i] = True
+                else:
+                    tx_queues[i].put(1)
+
+    # for w in workers:
+    #     w.join()
     stop = time.time()
 
     ### Threading

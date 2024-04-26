@@ -26,6 +26,7 @@ def tensor_model_parallel_all_reduce(input_: torch.Tensor) -> torch.Tensor:
     value as the output. 
     """
     # Bypass the function if we are using only 1 GPU.
+    return input_
     if get_tensor_model_parallel_world_size() == 1:
         return input_
     out = custom_all_reduce(input_)
@@ -39,6 +40,7 @@ def tensor_model_parallel_all_reduce(input_: torch.Tensor) -> torch.Tensor:
 def tensor_model_parallel_all_gather(input_: torch.Tensor,
                                      dim: int = -1) -> torch.Tensor:
     """All-gather the input tensor across model parallel group."""
+    return input_
     world_size = get_tensor_model_parallel_world_size()
     # Bypass the function if we are using only 1 GPU.
     if world_size == 1:
@@ -72,6 +74,7 @@ def tensor_model_parallel_gather(input_: torch.Tensor,
     NOTE: We assume that the input tensor is on the same device across
     all the ranks.
     """
+    return input_
     world_size = get_tensor_model_parallel_world_size()
     # Bypass the function if we are using only 1 GPU.
     if world_size == 1:
@@ -102,6 +105,7 @@ def broadcast(input_: torch.Tensor,
               src: int = 0,
               group: Optional[ProcessGroup] = None):
     """Broadcast the input tensor."""
+    return input_
     group = group or torch.distributed.group.WORLD
     ranks = torch.distributed.get_process_group_ranks(group)
     assert src in ranks, f"Invalid src rank ({src})"
@@ -119,6 +123,7 @@ def broadcast_object_list(obj_list: List[Any],
                           src: int = 0,
                           group: Optional[ProcessGroup] = None):
     """Broadcast the input object list."""
+    return obj_list
     group = group or torch.distributed.group.WORLD
     ranks = torch.distributed.get_process_group_ranks(group)
     assert src in ranks, f"Invalid src rank ({src})"
@@ -141,6 +146,8 @@ def broadcast_tensor_dict(
     group: Optional[ProcessGroup] = None,
 ) -> Dict[Any, Union[torch.Tensor, Any]]:
     """Broadcast the input tensor dictionary."""
+    ### Skip b/c one GPU
+    return tensor_dict
     group = group or torch.distributed.group.WORLD
     ranks = torch.distributed.get_process_group_ranks(group)
     assert src in ranks, f"Invalid src rank ({src})"

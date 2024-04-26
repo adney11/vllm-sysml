@@ -362,7 +362,7 @@ class Worker:
             blocks_to_nw = data["blocks_to_nw"]
             is_prompt = data["is_prompt"]
 
-        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
+        # self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:

@@ -22,11 +22,15 @@ from vllm.transformers_utils.tokenizer import (detokenize_incrementally,
                                                TokenizerGroup)
 from vllm.utils import Counter, set_cuda_visible_devices, get_ip, get_open_port, get_distributed_init_method
 
+import torch.multiprocessing as mp
+
 if ray:
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 if TYPE_CHECKING:
     from ray.util.placement_group import PlacementGroup
+
+import pdb
 
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 0 # Originally 5, 0 to disable interval logging
@@ -264,9 +268,6 @@ class LLMEngine:
             node_gpus[node_id] = sorted(gpu_ids)
 
 
-        # import pdb
-        # pdb.set_trace()
-
         # Set CUDA_VISIBLE_DEVICES for the driver.
         set_cuda_visible_devices(node_gpus[driver_node_id])
         for worker, (node_id, _) in zip(self.workers, worker_node_and_gpu_ids):
@@ -358,21 +359,21 @@ class LLMEngine:
             by adjusting the `gpu_memory_utilization` parameters.
         """
         # Get the maximum number of blocks that can be allocated on GPU and CPU.
-        # num_blocks = self._run_workers(
-        #     "profile_num_available_blocks",
-        #     block_size=self.cache_config.block_size,
-        #     gpu_memory_utilization=self.cache_config.gpu_memory_utilization,
-        #     cpu_swap_space=self.cache_config.swap_space_bytes,
-        #     cache_dtype=self.cache_config.cache_dtype,
-        # )
+        num_blocks = self._run_workers(
+            "profile_num_available_blocks",
+            block_size=self.cache_config.block_size,
+            gpu_memory_utilization=self.cache_config.gpu_memory_utilization,
+            cpu_swap_space=self.cache_config.swap_space_bytes,
+            cache_dtype=self.cache_config.cache_dtype,
+        )
 
         # Since we use a shared centralized controller, we take the minimum
         # number of blocks across all workers to make sure all the memory
         # operators can be applied to all workers.
-        # num_gpu_blocks = min(b[0] for b in num_blocks)
-        # num_cpu_blocks = min(b[1] for b in num_blocks)
-        num_gpu_blocks = 400 # 0.9 = 817
-        num_cpu_blocks = 256 # 0.9 = 512
+        num_gpu_blocks = min(b[0] for b in num_blocks)
+        num_cpu_blocks = min(b[1] for b in num_blocks)
+        # num_gpu_blocks = 400 # 0.9 = 817
+        # num_cpu_blocks = 256 # 0.9 = 512
         # FIXME(woosuk): Change to debug log.
         logger.info(f"# GPU blocks: {num_gpu_blocks}, "
                     f"# CPU blocks: {num_cpu_blocks}")
@@ -647,6 +648,7 @@ class LLMEngine:
                                    last_child_sample.logprobs)
             child_seqs.append((parent, parent))
 
+
         for seq, _ in child_seqs:
             self._decode_sequence(seq, seq_group.sampling_params)
             self._check_stop(seq, seq_group.sampling_params)
@@ -854,43 +856,132 @@ class LLMEngine:
             >>>     if not (engine.has_unfinished_requests() or example_inputs):
             >>>         break
         """
-        seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
-        if seq_group_metadata_list[0].is_prompt:
-            logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
+        has_prompt = False
+        has_token = False
+        prompt_sched_info, token_sched_info = self.scheduler.schedule()
+        prompt_output = []
+        token_output = []
+        if prompt_sched_info:
+            prompt_seq_group_metadata_list, prompt_scheduler_outputs = prompt_sched_info
+            if not prompt_scheduler_outputs.is_empty():
+                has_prompt = True
+                logger.info(f"\n===! Step {self._num_steps} has prompt phase !===\n")
+        if token_sched_info:
+            token_seq_group_metadata_list, token_scheduler_outputs = token_sched_info
+            if not token_scheduler_outputs.is_empty():
+                has_token = True
+                logger.info(f"\n===! Step {self._num_steps} has token phase !===\n")
 
-        if scheduler_outputs.is_empty():
-            output = []
-        elif self.parallel_config.sep_prompt_token:
-            all_outputs = self._run_stage_workers(
-                "execute_model",
-                prompt_stage=seq_group_metadata_list[0].is_prompt,
-                driver_kwargs={
-                    "seq_group_metadata_list": seq_group_metadata_list,
-                    "blocks_to_swap_in": scheduler_outputs.blocks_to_swap_in,
-                    "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
-                    "blocks_to_copy": scheduler_outputs.blocks_to_copy,
-                    "blocks_to_nw": scheduler_outputs.blocks_to_nw,
-                })
+        if has_prompt and has_token:
+            prompt_queue = mp.Queue()
+            prompt_driver_kwargs={
+                "seq_group_metadata_list": prompt_seq_group_metadata_list,
+                "blocks_to_swap_in": prompt_scheduler_outputs.blocks_to_swap_in,
+                "blocks_to_swap_out": prompt_scheduler_outputs.blocks_to_swap_out,
+                "blocks_to_copy": prompt_scheduler_outputs.blocks_to_copy,
+                "blocks_to_nw": {},
+            }
+            
+            ### Launch prompt process - prompt takes longer
+            # pdb.set_trace()
+            prompt_proc = mp.Process(target=self._run_workers_queue, args=(prompt_queue, "execute_model", prompt_driver_kwargs), name=f'Prompt child-process')
+            start = time.time()
+            prompt_proc.start()
+            stop = time.time()
+            logger.info(f"=== Elapsed {stop - start} s to start extra process... ===")
 
-            # Only the driver worker returns the sampling results.
-            output = all_outputs[0]
-        else:
-            # Execute the model.
+            ### Process token sequences
             all_outputs = self._run_workers(
                 "execute_model",
                 driver_kwargs={
-                    "seq_group_metadata_list": seq_group_metadata_list,
-                    "blocks_to_swap_in": scheduler_outputs.blocks_to_swap_in,
-                    "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
-                    "blocks_to_copy": scheduler_outputs.blocks_to_copy,
+                    "seq_group_metadata_list": token_seq_group_metadata_list,
+                    "blocks_to_swap_in": token_scheduler_outputs.blocks_to_swap_in,
+                    "blocks_to_swap_out": token_scheduler_outputs.blocks_to_swap_out,
+                    "blocks_to_copy": token_scheduler_outputs.blocks_to_copy,
+                    "blocks_to_nw": {},
+            })
+            token_output = all_outputs[0]
+
+            ### Wait for prompt process to complete
+            prompt_proc.join()    
+            prompt_output = prompt_queue.get()[0]
+
+        elif has_prompt:
+            all_outputs = self._run_workers(
+                "execute_model",
+                driver_kwargs={
+                    "seq_group_metadata_list": prompt_seq_group_metadata_list,
+                    "blocks_to_swap_in": prompt_scheduler_outputs.blocks_to_swap_in,
+                    "blocks_to_swap_out": prompt_scheduler_outputs.blocks_to_swap_out,
+                    "blocks_to_copy": prompt_scheduler_outputs.blocks_to_copy,
                     "blocks_to_nw": {},
                 })
-
             # Only the driver worker returns the sampling results.
-            output = all_outputs[0]
+            prompt_output = all_outputs[0]
+        elif has_token:
+            all_outputs = self._run_workers(
+                "execute_model",
+                driver_kwargs={
+                    "seq_group_metadata_list": token_seq_group_metadata_list,
+                    "blocks_to_swap_in": token_scheduler_outputs.blocks_to_swap_in,
+                    "blocks_to_swap_out": token_scheduler_outputs.blocks_to_swap_out,
+                    "blocks_to_copy": token_scheduler_outputs.blocks_to_copy,
+                    "blocks_to_nw": {},
+                })
+            # Only the driver worker returns the sampling results.
+            token_output = all_outputs[0]
+        # else:
+        #     output = []
+        #     return self._process_model_outputs(output, combine_scheduler_outputs) # Check if this is OK
 
         self._num_steps += 1
-        return self._process_model_outputs(output, scheduler_outputs)
+        
+        prompt_processed_outputs = []
+        token_processed_outputs = []
+        if has_prompt:
+            prompt_processed_outputs = self._process_model_outputs(prompt_output, prompt_scheduler_outputs)
+        if has_token:
+            token_processed_outputs = self._process_model_outputs(token_output, token_scheduler_outputs)
+
+        return prompt_processed_outputs + token_processed_outputs
+
+        # seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
+        # if seq_group_metadata_list[0].is_prompt:
+        #     logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
+
+        # if scheduler_outputs.is_empty():
+        #     output = []
+        # elif self.parallel_config.sep_prompt_token:
+        #     all_outputs = self._run_stage_workers(
+        #         "execute_model",
+        #         prompt_stage=seq_group_metadata_list[0].is_prompt,
+        #         driver_kwargs={
+        #             "seq_group_metadata_list": seq_group_metadata_list,
+        #             "blocks_to_swap_in": scheduler_outputs.blocks_to_swap_in,
+        #             "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
+        #             "blocks_to_copy": scheduler_outputs.blocks_to_copy,
+        #             "blocks_to_nw": scheduler_outputs.blocks_to_nw,
+        #         })
+
+        #     # Only the driver worker returns the sampling results.
+        #     output = all_outputs[0]
+        # else:
+        #     # Execute the model.
+        #     all_outputs = self._run_workers(
+        #         "execute_model",
+        #         driver_kwargs={
+        #             "seq_group_metadata_list": seq_group_metadata_list,
+        #             "blocks_to_swap_in": scheduler_outputs.blocks_to_swap_in,
+        #             "blocks_to_swap_out": scheduler_outputs.blocks_to_swap_out,
+        #             "blocks_to_copy": scheduler_outputs.blocks_to_copy,
+        #             "blocks_to_nw": {},
+        #         })
+
+        #     # Only the driver worker returns the sampling results.
+        #     output = all_outputs[0]
+
+        # self._num_steps += 1
+        # return self._process_model_outputs(output, scheduler_outputs)
 
     def do_log_stats(self) -> None:
         """Forced log when no requests active."""
@@ -1074,6 +1165,43 @@ class LLMEngine:
 
         return [driver_worker_output] + ray_worker_outputs
 
+    def _run_workers_queue(
+        self,
+        queue,
+        method: str,
+        driver_kwargs: Optional[Dict[str, Any]] = None,
+        driver_args: Optional[List[Any]] = None,
+        max_concurrent_workers: Optional[int] = None,
+        **kwargs,
+    ):
+        """Runs the given method on all workers."""
+        if max_concurrent_workers:
+            raise NotImplementedError(
+                "max_concurrent_workers is not supported yet.")
+
+        # # Start the ray workers first.
+        # ray_worker_outputs = [
+        #     worker.execute_method.remote(method, *args, **kwargs)
+        #     for worker in self.workers
+        # ]
+
+        # if driver_args is None:
+        #     driver_args = args
+        if driver_kwargs is None:
+            driver_kwargs = kwargs
+
+        # Start the driver worker after all the ray workers.
+        torch.cuda.nvtx.range_push("driver_worker_queue")
+        driver_worker_output = getattr(self.driver_worker,
+                                       method)(**driver_kwargs)
+        torch.cuda.nvtx.range_pop()
+
+        # Get the results of the ray workers.
+        # if self.workers:
+        #     ray_worker_outputs = ray.get(ray_worker_outputs)
+
+        queue.put([driver_worker_output])
+    
     def _run_stage_workers(
         self,
         method: str,
@@ -1095,7 +1223,6 @@ class LLMEngine:
             driver_args = args
         if driver_kwargs is None:
             driver_kwargs = kwargs
-
 
         if prompt_stage:
             # Prompt workers include 1 driver worker and num_prompt_workers-1 ray workers.
