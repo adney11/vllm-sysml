@@ -27,8 +27,8 @@ function disable_mps_if_needed()
 # echo "enabling MPS.."
 enable_mps_if_needed
 
-HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 nsys profile --capture-range cudaProfilerApi --gpu-metrics-device=0 -o check_llm_mps -f true python share_model.py
-# HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 python share_model.py
+# HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=3 nsys profile --capture-range cudaProfilerApi --gpu-metrics-device=3 -o check_llm_mps -f true python share_model.py
+HF_HOME=/sysml/.cache TMPDIR=/sysml/tmp CUDA_VISIBLE_DEVICES=0 python share_model.py
 
 # # echo "disabling MPS..."
 disable_mps_if_needed

@@ -371,8 +371,18 @@ class LLMEngine:
         # operators can be applied to all workers.
         # num_gpu_blocks = min(b[0] for b in num_blocks)
         # num_cpu_blocks = min(b[1] for b in num_blocks)
-        num_gpu_blocks = 400 # 0.9 = 817
-        num_cpu_blocks = 256 # 0.9 = 512
+        #opt-125m 0.45
+        num_gpu_blocks = 14546 # 0.9 = 817
+        num_cpu_blocks = 7281 # 0.9 = 512
+        
+        #opt-125m 0.225
+        # num_gpu_blocks = 6948
+        # num_cpu_blocks = 7281
+
+        #opt-125m 0.1125
+        # num_gpu_blocks = 2445
+        # num_cpu_blocks = 7281
+
         # FIXME(woosuk): Change to debug log.
         logger.info(f"# GPU blocks: {num_gpu_blocks}, "
                     f"# CPU blocks: {num_cpu_blocks}")
@@ -855,8 +865,8 @@ class LLMEngine:
             >>>         break
         """
         seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
-        if seq_group_metadata_list[0].is_prompt:
-            logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
+        # if seq_group_metadata_list[0].is_prompt:
+        #     logger.info(f"\n===! Step {self._num_steps} is prompt phase !===\n")
 
         if scheduler_outputs.is_empty():
             output = []

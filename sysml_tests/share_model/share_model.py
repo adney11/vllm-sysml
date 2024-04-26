@@ -17,7 +17,8 @@ import vllm_worker as vwork
 num_workers = 2
 shared_model = None
 
-def init(model="meta-llama/llama-2-7b-hf"):
+def init(model="facebook/opt-125m"):
+# def init(model="meta-llama/llama-2-7b-hf"):
     global shared_model
 
     if not torch.distributed.is_initialized():
@@ -113,7 +114,7 @@ if __name__ == '__main__':
     init()
 
     ### Warmup
-    run()
+    # run()
     torch.cuda.cudart().cudaProfilerStart()
     run()
     torch.cuda.cudart().cudaProfilerStop()
